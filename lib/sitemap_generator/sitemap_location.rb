@@ -162,8 +162,8 @@ module SitemapGenerator
 
     # Write `data` out to a file.
     # Output a summary line if verbose is true.
-    def write(data, link_count)
-      adapter.write(self, data)
+    def write(data, link_count, file_path = nil)
+      adapter.write(self, data, file_path)
       puts summary(link_count) if verbose?
     end
 

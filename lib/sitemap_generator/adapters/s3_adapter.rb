@@ -27,8 +27,8 @@ module SitemapGenerator
     end
 
     # Call with a SitemapLocation and string data
-    def write(location, raw_data)
-      SitemapGenerator::FileAdapter.new.write(location, raw_data)
+    def write(location, raw_data = nil, file_path = nil)
+      SitemapGenerator::FileAdapter.new.write(location, raw_data) unless file_path
 
       credentials = { :provider => @fog_provider }
 
@@ -46,7 +46,7 @@ module SitemapGenerator
       directory = storage.directories.new(:key => @fog_directory)
       directory.files.create(
         :key    => location.path_in_public,
-        :body   => File.open(location.path),
+        :body   => File.open(file_path || location.path),
         :public => true
       )
     end

@@ -1,5 +1,6 @@
 require 'zlib'
 require 'fileutils'
+require 'securerandom'
 require 'sitemap_generator/helpers/number_helper'
 
 module SitemapGenerator
@@ -106,10 +107,39 @@ module SitemapGenerator
           @news_count += 1
         end
 
-        # Add the XML to the sitemap
-        @xml_content << xml
+        add_data_to_xml_content(xml)
+
         @filesize += SitemapGenerator::Utilities.bytesize(xml)
         @link_count += 1
+      end
+
+      def add_data_to_xml_content(data)
+        @xml_content << data
+        @xml_content_counter = @xml_content_counter.to_i + 1
+
+        finalize_xml_chunk if @xml_content_counter >= 200
+      end
+
+      def finalize_xml_chunk
+        @xml_content_counter = 0
+
+        chunk_uuid = "sitemap-tmp-#{SecureRandom.uuid}"
+
+        File.open("#{chunk_dir}/#{chunk_uuid}", 'w+') do |f|
+          f.write(@xml_content)
+        end
+
+        xml_chunks << chunk_uuid
+
+        @xml_content = ''
+      end
+
+      def chunk_dir
+        @chunk_dir ||= Dir.mktmpdir
+      end
+
+      def xml_chunks
+        @xml_chunks ||= []
       end
 
       # "Freeze" this object.  Actually just flags it as frozen.
@@ -136,9 +166,33 @@ module SitemapGenerator
         raise SitemapGenerator::SitemapError.new("Sitemap already written!") if written?
         finalize! unless finalized?
         reserve_name
-        @location.write(@xml_wrapper_start + @xml_content + @xml_wrapper_end, link_count)
+
+        finalize_xml_chunk
+
+        result_file = "sitemap-res-#{SecureRandom.uuid}"
+        result_file_path = "#{chunk_dir}/#{result_file}"
+
+        file = File.open(result_file_path, 'a+')
+
+        file.write(@xml_wrapper_start)
+
+        xml_chunks.each do |chunk|
+          chunk_data = File.read("#{chunk_dir}/#{chunk}")
+
+          file.write(chunk_data)
+        end
+
+        file.write(@xml_wrapper_end)
+
+        file.close
+
+        @location.write(nil, link_count, result_file_path)
+
         @xml_content = @xml_wrapper_start = @xml_wrapper_end = ''
         @written = true
+
+        FileUtils.rm_rf(chunk_dir)
+        @chunk_dir = nil
       end
 
       # Return true if this file has been written out to disk
